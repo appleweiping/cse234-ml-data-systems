@@ -1,0 +1,46 @@
+PA1 Question 3 - Fused Operators: Writeup
+
+Intuition behind fused operators
+--------------------------------
+A naive computational graph executes one primitive at a time: MatMul writes its
+full (A @ B) result to memory, LayerNorm (or Softmax) then reads that result back,
+computes statistics, and writes a second output. Each un-fused op therefore pays
+for (1) a kernel launch and (2) a full round-trip of the intermediate tensor
+through DRAM. A fused operator such as MatMulLayerNorm or MatMulSoftmax collapses
+these two logical steps into a single kernel: the matmul result is produced and
+immediately normalized while it is still resident in fast on-chip storage
+(registers / shared memory / cache), so the large intermediate never has to be
+materialized in global memory. In this assignment the fusion is implemented at the
+autodiff-op level - one Node with one compute() and one gradient() replaces the
+two-node MatMul -> Norm subgraph - which is the same idea one level up from the
+kernel: fewer graph nodes, fewer materialized activations, one adjoint chain.
+
+Why it improves efficiency
+---------------------------
+These operations are memory-bandwidth bound, not compute bound: after the GEMM,
+LayerNorm and Softmax do only O(n) elementwise work over the O(MxN) intermediate,
+so their runtime is dominated by moving that intermediate to and from memory.
+Fusion removes exactly that traffic - the intermediate is read and written zero
+extra times - and also removes one kernel-launch overhead. On the backward pass
+we get the same win: instead of storing (A @ B) as a saved activation, we
+reconstruct Z = A @ B inside the fused gradient() and route the upstream gradient
+through the analytic LayerNorm/Softmax adjoint to obtain dL/dZ, then apply the
+standard MatMul adjoints dL/dA = dL/dZ @ B^T and dL/dB = A^T @ dL/dZ. Because
+these two patterns (matmul-then-normalize) appear on nearly every layer of a
+transformer, the saved bandwidth and launch overhead compound across the whole
+model and become a meaningful end-to-end speedup.
+
+Potential future improvements
+-----------------------------
+1. True single-kernel fusion (e.g. a Triton/CUDA kernel that keeps tiles of
+   A @ B in shared memory and normalizes in place) so the intermediate is never
+   written even once, rather than the op-level graph fusion used here.
+2. Fuse the epilogue further: bias-add, dropout, and the residual add can be
+   folded into the same kernel as MatMul+LayerNorm, extending the pattern to the
+   full transformer sublayer.
+3. Recompute-vs-store trade-off in the backward pass: recomputing Z saves memory
+   but costs a second GEMM; an autotuner could choose per-layer whether to
+   recompute or checkpoint based on the memory budget.
+4. Numerically fuse the softmax max-subtraction and normalization into the GEMM
+   epilogue (online-softmax / FlashAttention style) to avoid a second pass over
+   the row for the denominator.

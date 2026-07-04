@@ -138,6 +138,11 @@ class SpeculativeDecoder:
         acceptance_rate = (total_draft_tokens_accepted / total_draft_tokens_proposed
                            if total_draft_tokens_proposed > 0 else 0)
         self._last_acceptance = acceptance_rate
+        # A speculative round appends a variable number of tokens (accepted prefix
+        # + bonus), so the loop can overshoot the budget. Truncate to exactly
+        # max_tokens new tokens so the output is comparable to greedy baseline
+        # decoding (which stops at exactly max_new_tokens).
+        input_ids = input_ids[:, : prompt_length + max_tokens]
         return self.target_tokenizer.decode(input_ids[0], skip_special_tokens=True)
 
     @torch.no_grad()
