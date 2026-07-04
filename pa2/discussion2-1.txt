@@ -1,1 +1,20 @@
-Put discussion here for 2.1
+Discussion for 2.1 — myAllreduce and myAlltoall vs. the MPI built-ins
+
+myAllreduce (reduce-to-root + broadcast, tree depth = 2 hops effectively O(n)
+at the root): measured on 8 ranks, 100 runs, MS-MPI on a single 16-logical-core
+Windows box: MPI.Allreduce ~0.000050 s vs myAllreduce ~0.000120 s (~2.4x slower).
+
+myAlltoall (pairwise Sendrecv over all peers): MPI.Alltoall ~0.0079 s vs
+myAlltoall ~0.0158 s (~2x slower).
+
+Why the gap: the built-ins use bandwidth-optimal, log-depth algorithms
+(recursive-halving / recursive-doubling, ring, Bruck) and can overlap
+communication, whereas our versions are linear. myAllreduce funnels all data
+through rank 0, so the root does O(n) sequential receives and sends and becomes
+a serialization bottleneck; a real all-reduce spreads that work with a
+reduce-scatter followed by an all-gather in O(log n) rounds. myAlltoall performs
+n-1 blocking Sendrecv exchanges per rank with no pipelining, while MPI schedules
+the exchanges to keep the network busy and avoid congestion. Both of ours are
+correct (100/100 runs match the built-in) but pay for their simplicity in
+latency. Note all runs are shared-memory loopback on one node, so absolute
+numbers are dominated by copy/launch overhead rather than real network cost.

@@ -73,7 +73,40 @@ class Communicator(object):
           - For non-root processes: one send and one receive.
           - For the root process: (n-1) receives and (n-1) sends.
         """
-        #TODO: Your code here
+        rank = self.comm.Get_rank()
+        size = self.comm.Get_size()
+
+        # Map the MPI op to a numpy reduction so we can combine locally at root.
+        def reduce_pair(acc, other):
+            if op == MPI.SUM:
+                return acc + other
+            if op == MPI.MIN:
+                return np.minimum(acc, other)
+            if op == MPI.MAX:
+                return np.maximum(acc, other)
+            if op == MPI.PROD:
+                return acc * other
+            raise NotImplementedError(f"Unsupported op: {op}")
+
+        if rank == 0:
+            # Root starts with its own data, then folds in every other rank.
+            acc = np.array(src_array, copy=True)
+            recv_buf = np.empty_like(src_array)
+            for src in range(1, size):
+                self.comm.Recv(recv_buf, source=src, tag=0)
+                self.total_bytes_transferred += recv_buf.itemsize * recv_buf.size
+                acc = reduce_pair(acc, recv_buf)
+            # Broadcast the reduced result back to everyone (including self).
+            dest_array[...] = acc
+            for dst in range(1, size):
+                self.comm.Send(acc, dest=dst, tag=1)
+                self.total_bytes_transferred += acc.itemsize * acc.size
+        else:
+            # Non-root: send our contribution to root, receive the final result.
+            self.comm.Send(src_array, dest=0, tag=0)
+            self.total_bytes_transferred += src_array.itemsize * src_array.size
+            self.comm.Recv(dest_array, source=0, tag=1)
+            self.total_bytes_transferred += dest_array.itemsize * dest_array.size
 
     def myAlltoall(self, src_array, dest_array):
         """
@@ -87,7 +120,34 @@ class Communicator(object):
           - For the local segment (when destination == self), a direct copy is done.
           - For all other segments, the process exchanges the corresponding
             portion of its src_array with the other process via Sendrecv.
-            
+
         The total data transferred is updated for each pairwise exchange.
         """
-        #TODO: Your code here
+        rank = self.comm.Get_rank()
+        size = self.comm.Get_size()
+
+        seg_len = src_array.size // size
+        # Flat views so segment i is src[i*seg_len:(i+1)*seg_len].
+        src_flat = src_array.reshape(-1)
+        dst_flat = dest_array.reshape(-1)
+
+        for other in range(size):
+            s0, s1 = other * seg_len, (other + 1) * seg_len
+            if other == rank:
+                # Local segment: direct copy, no network transfer.
+                dst_flat[s0:s1] = src_flat[s0:s1]
+            else:
+                send_seg = np.ascontiguousarray(src_flat[s0:s1])
+                recv_seg = np.empty(seg_len, dtype=dest_array.dtype)
+                # Exchange: we send the segment destined for `other`, and receive
+                # from `other` the segment they destined for us.
+                self.comm.Sendrecv(
+                    sendbuf=send_seg, dest=other, sendtag=0,
+                    recvbuf=recv_seg, source=other, recvtag=0,
+                )
+                dst_flat[s0:s1] = recv_seg
+                self.total_bytes_transferred += send_seg.itemsize * send_seg.size
+                self.total_bytes_transferred += recv_seg.itemsize * recv_seg.size
+
+        # Write back in case dest_array wasn't a view (reshape may copy).
+        dest_array[...] = dst_flat.reshape(dest_array.shape)

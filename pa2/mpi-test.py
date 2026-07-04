@@ -27,7 +27,7 @@ if __name__ == "__main__":
         """
 
         r = np.random.randint(0, 100, 100)
-        rr = np.empty(100, dtype=int)
+        rr = np.empty(100, dtype=r.dtype)  # match r's dtype (int32 on Windows)
 
         print("Rank " + str(rank) + ": " + str(r))
 
@@ -51,9 +51,10 @@ if __name__ == "__main__":
         for run in range(num_runs):
             # Create a random integer array (each process gets its own random array)
             r = np.random.randint(0, 100, 100)
-            # Arrays to store the reduction results
-            rr_allreduce   = np.empty(100, dtype=int)
-            rr_myallreduce = np.empty(100, dtype=int)
+            # Arrays to store the reduction results (match r's dtype for
+            # cross-platform correctness: randint yields int32 on Windows).
+            rr_allreduce   = np.empty(100, dtype=r.dtype)
+            rr_myallreduce = np.empty(100, dtype=r.dtype)
 
             # --- Built-in Allreduce Timing ---
             comm.Barrier()  # Synchronize all processes before timing
@@ -103,7 +104,7 @@ if __name__ == "__main__":
         """
 
         r = np.random.randint(0, 100, 2)
-        rr = np.empty(16, dtype=int)
+        rr = np.empty(16, dtype=r.dtype)
 
         print("Rank " + str(rank) + ": " + str(r))
 
@@ -119,7 +120,7 @@ if __name__ == "__main__":
         """
 
         r = np.random.randint(0, 100, 16)
-        rr = np.empty(2, dtype=int)
+        rr = np.empty(2, dtype=r.dtype)
 
         print("Rank " + str(rank) + ": " + str(r))
 
@@ -139,7 +140,7 @@ if __name__ == "__main__":
         """
 
         r = np.random.randint(0, 100, 10)
-        rr = np.empty(10, dtype=int)
+        rr = np.empty(10, dtype=r.dtype)
 
         print("Rank " + str(rank) + ": " + str(r))
 
