@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Datasets & caches (downloaded at runtime, not redistributed)
+pa1/data/
+pa2/data/MNISTdata.hdf5
+data/
+*.hdf5
+hf_cache/
+*.pt
+*.bin
+*.safetensors
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Handin tarballs
+handin.tar
+*.tar
+
+# Large result binaries (keep .txt/.json/.md/.png metrics though)
+results/**/*.npy
