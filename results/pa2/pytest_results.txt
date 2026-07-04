@@ -1,0 +1,22 @@
+﻿CSE234 PA2 test results (MS-MPI 10.1, Python 3.11 CPU, Windows)
+
+### test_data_split (single process) ###
+
+4 passed in 4.80s
+
+
+### test_get_info (mpiexec -n 8) ###
+
+2 passed in 5.04s
+
+
+### test_transformer_forward (mpiexec -n 4) ###
+
+2 passed in 4.88s
+
+
+### test_transformer_backward (mpiexec -n 4) ###
+
+2 passed in 12.61s
+
+

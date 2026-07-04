@@ -1,0 +1,17 @@
+CSE234 PA3 Part 2 - Cost Analysis (measured)
+
+$ python model_training_cost_analysis.py --model_config llama_7b_config.json
+Number of parameters: 6738415616
+Number of TFLOPs: 0.897648164864
+Peak memory cost: 0.3857421875 GBs
+
+$ python model_training_cost_analysis.py --model_config deepseek_v3_config.json
+Number of parameters: 671026279424
+Number of TFLOPs: 2390.21372473344
+Peak memory cost: 6423.125 GBs
+
+$ python model_training_cost_analysis.py --training_budget 5000000
+best_gpu: A100
+training_budget_flops: 5.616e+23
+Optimal N: 47863009232.2638
+Optimal D: 1955581178479.3823

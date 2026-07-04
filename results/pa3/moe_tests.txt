@@ -1,0 +1,15 @@
+﻿CSE234 PA3 Part 1 - MoE tests (MS-MPI, NumPy CPU)
+### official test_moe.py (mpiexec -n 5) ###
+
+Simple MoE test passed ✅
+Expert Parallel MoE test passed ✅
+Tensor Parallel MoE test passed ✅
+
+
+### correctness cross-checks (mpiexec -n 5) ###
+
+TP ShardedLinear reconstructs full weight: OK
+TP shapes + replication: OK
+EP shapes + replication: OK
+
+

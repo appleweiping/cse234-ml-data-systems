@@ -1,0 +1,10 @@
+========================================================================
+Speculative decoding  (target=pythia-410m, draft=pythia-70m, device=cpu, k=8, max_tokens=60)
+========================================================================
+--- Prompt 1: 'The future of Artificial Intelligence is' ---
+baseline 9.84s | speculative 8.45s | speedup 1.16x | acceptance 53.12% | output==baseline: True
+--- Prompt 2: 'Once upon a time, in a small village,' ---
+baseline 8.87s | speculative 14.74s | speedup 0.60x | acceptance 30.92% | output==baseline: True
+========================================================================
+AVERAGE  baseline 9.36s  speculative 11.59s  speedup 0.81x  acceptance 42.02%  all_correct=True
+========================================================================
