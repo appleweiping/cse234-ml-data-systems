@@ -1,0 +1,24 @@
+# CSE234 Data Systems for Machine Learning - dependencies actually imported by this repo.
+# Python 3.11, CPU-only. Versions are what the results were measured with.
+
+# Core (PA1 autodiff engine + transformer; PA3 speculative decoding)
+torch==2.12.1
+torchvision==0.27.1
+numpy==2.4.6
+scikit-learn==1.9.0
+
+# PA2 tensor/data parallelism + PA3 MoE (distributed, MPI).
+# Requires an MPI runtime: MS-MPI on Windows, OpenMPI/MPICH on Linux/macOS.
+mpi4py==4.1.2
+
+# PA3 Part 3 speculative decoding (small Pythia models on CPU).
+transformers==5.12.1
+
+# Testing
+pytest==9.1.1
+pytest-mpi==0.6
+
+# PA2 Part 1 matmul kernel is Triton (GPU only) - not installable/runnable on the
+# CPU box; see pa2/matmul_tiled_cpu.py for the CPU-runnable reference. Install
+# `triton` on a CUDA machine to run the notebook kernel.
+# triton>=3.0
