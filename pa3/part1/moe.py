@@ -86,11 +86,14 @@ class ShardedLinear:
         if x.shape[0] == 0:
             return np.zeros((0, self.out_features_global))
 
-        # Create a buffer for the full output
-        result = np.zeros((x.shape[0], self.out_features_global), dtype=np.float32)
+        # Each rank owns the output columns [output_offset : output_offset+local].
+        # Compute the local partial output, then all-gather the shards across all
+        # ranks and stitch them back together along the output dimension.
+        local_out = np.dot(x, self.weight) + self.bias   # (batch, local_out_features)
+        local_out = np.ascontiguousarray(local_out.astype(np.float32))
 
-        # TODO: Produce the result of sharded linear layer.
-
+        gathered = mpi.allgather(local_out)  # list of world_size arrays, index = rank
+        result = np.concatenate(gathered, axis=1).astype(np.float32)
         return result
 
 
@@ -161,10 +164,20 @@ class MoE_TP:
         # Initialize output tensor
         outputs = np.zeros((batch_size, self.output_dim))
 
-        # TODO: Implement the TP-style MoE forward pass.
-        # 1. Compute the routing indices and gates for each input
+        # TP-style MoE: every rank holds a shard of *every* expert. Each
+        # ShardedExpert call internally all-gathers its output shards, so it
+        # returns the full expert output on all ranks. The router is replicated,
+        # so all ranks compute the same routing and the same combined output.
+        # 1. Routing.
         indices, gates = self.router(x, self.topk)
-        # 2. Process experts parallel with TP style. 
+        # 2. Combine the (sharded) expert outputs, weighted by the gates.
+        for k in range(self.topk):
+            for i in range(batch_size):
+                expert_idx = indices[i, k]
+                gate = gates[i, k]
+                item = x[i:i + 1]                       # (1, input_dim)
+                expert_output = self.experts[expert_idx](item)  # TP all-gather inside
+                outputs[i] += gate * expert_output[0]
 
         return outputs
 
@@ -279,15 +292,35 @@ class MoE_EP:
         # Initialize output tensor
         outputs = np.zeros((batch_size, self.output_dim))
 
-        # TODO: Implement the forward pass.
-        # 1. Compute the routing indices and gates for each input
+        # EP-style MoE: rank r hosts expert r in its entirety. The router is
+        # replicated so every rank knows the full routing table.
+        # 1. Routing (identical on all ranks).
         indices, gates = self.router(x, self.topk)
 
-        # 2. Process local inputs with this expert (within the device)
+        # 2. Each rank runs ITS expert over only the tokens routed to it. We
+        #    build a boolean mask of which tokens select this rank's expert
+        #    (in any of their top-k slots), run the expert on that gathered
+        #    slice, and scatter the results back to a full-batch buffer.
+        my_expert = self.rank
+        token_mask = np.any(indices == my_expert, axis=1)  # (batch,)
+        local_full = np.zeros((batch_size, self.output_dim), dtype=np.float64)
+        if np.any(token_mask):
+            sel = np.where(token_mask)[0]
+            local_out = self.expert(x[sel])               # (num_sel, output_dim)
+            local_full[sel] = local_out
 
-        # 3. Communicate between devices to get the outputs from all experts
+        # 3. All-to-all / all-gather each expert's full-batch contribution so
+        #    every rank can assemble the final combination. (allgather of the
+        #    per-expert full-batch buffers is the communication step.)
+        all_expert_out = mpi.allgather(local_full)  # list indexed by expert/rank
 
-        # 4. Return the outputs
+        # 4. Combine with the gates: for each token and each of its top-k picks,
+        #    add gate * (that expert's output for this token).
+        for i in range(batch_size):
+            for k in range(self.topk):
+                e = indices[i, k]
+                gate = gates[i, k]
+                outputs[i] += gate * all_expert_out[e][i]
 
         return outputs
 
